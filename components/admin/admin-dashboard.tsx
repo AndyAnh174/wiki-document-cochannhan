@@ -2,11 +2,11 @@
 
 import { useEffect, useState } from "react"
 import type { Session } from "@supabase/supabase-js"
+import { GoogleLogin, GoogleOAuthProvider } from "@react-oauth/google"
 import {
   BookOpenIcon,
   BugIcon,
   DatabaseIcon,
-  LogInIcon,
   LogOutIcon,
   ShieldCheckIcon,
 } from "lucide-react"
@@ -33,7 +33,6 @@ import {
   getBrowserSupabaseClient,
   isBrowserSupabaseConfigured,
 } from "@/lib/supabase/client"
-import { withBasePath } from "@/lib/base-path"
 
 export function AdminDashboard() {
   const [session, setSession] = useState<Session | null>(null)
@@ -152,17 +151,18 @@ function AdminLogin({ error }: { error: string }) {
   const [submitting, setSubmitting] = useState(false)
   const [message, setMessage] = useState(error)
 
-  async function signInWithGoogle() {
+  async function signInWithGoogle(credential?: string) {
     const supabase = getBrowserSupabaseClient()
-    if (!supabase) return
+    if (!supabase || !credential) {
+      setMessage("Google không trả về thông tin đăng nhập hợp lệ.")
+      return
+    }
     setSubmitting(true)
     setMessage("")
     await supabase.auth.signOut({ scope: "local" })
-    const { error: loginError } = await supabase.auth.signInWithOAuth({
+    const { error: loginError } = await supabase.auth.signInWithIdToken({
       provider: "google",
-      options: {
-        redirectTo: `${window.location.origin}${withBasePath("/admin")}`,
-      },
+      token: credential,
     })
     setSubmitting(false)
     if (loginError)
@@ -189,11 +189,25 @@ function AdminLogin({ error }: { error: string }) {
           </p>
           {message ? <FieldError className="mt-4">{message}</FieldError> : null}
         </CardContent>
-        <CardFooter>
-          <Button className="w-full" disabled={submitting} onClick={signInWithGoogle}>
-            {submitting ? <Spinner data-icon="inline-start" /> : <LogInIcon data-icon="inline-start" />}
-            Đăng nhập với Google
-          </Button>
+        <CardFooter className="justify-center">
+          {submitting ? (
+            <Button className="w-full" disabled>
+              <Spinner data-icon="inline-start" /> Đang xác thực Google…
+            </Button>
+          ) : process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID ? (
+            <GoogleOAuthProvider clientId={process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID}>
+              <GoogleLogin
+                onSuccess={(response) => void signInWithGoogle(response.credential)}
+                onError={() => setMessage("Không thể mở hoặc hoàn tất đăng nhập Google.")}
+                text="signin_with"
+                shape="pill"
+                size="large"
+                theme="outline"
+              />
+            </GoogleOAuthProvider>
+          ) : (
+            <FieldError>Chưa cấu hình Google Client ID cho Wiki.</FieldError>
+          )}
         </CardFooter>
       </Card>
     </main>
