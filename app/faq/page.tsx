@@ -30,6 +30,7 @@ export const metadata: Metadata = {
 
 export default async function FaqPage() {
   const entries = await listPublishedFaq()
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL?.replace(/\/$/, "")
 
   return (
     <main className="mx-auto w-full max-w-5xl px-5 py-8 sm:px-8 lg:px-12 lg:py-12">
@@ -67,6 +68,20 @@ export default async function FaqPage() {
               </AccordionTrigger>
               <AccordionContent>
                 <WikiMarkdown content={entry.answer.split("\n")} />
+                {entry.faq_media.length && supabaseUrl ? (
+                  <div className="mt-5 grid gap-4 sm:grid-cols-2">
+                    {entry.faq_media.map((media) => (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        key={media.id}
+                        src={`${supabaseUrl}/storage/v1/object/public/wiki-assets/${media.object_path.split("/").map(encodeURIComponent).join("/")}`}
+                        alt={media.alt_text || entry.question}
+                        loading="lazy"
+                        className="max-h-96 w-full rounded-xl border object-contain"
+                      />
+                    ))}
+                  </div>
+                ) : null}
               </AccordionContent>
             </AccordionItem>
           ))}

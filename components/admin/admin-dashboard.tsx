@@ -1,8 +1,8 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useCallback, useEffect, useState } from "react"
 import type { Session } from "@supabase/supabase-js"
-import { GoogleLogin, GoogleOAuthProvider } from "@react-oauth/google"
+import { GoogleLogin, GoogleOAuthProvider, type CredentialResponse } from "@react-oauth/google"
 import {
   BookOpenIcon,
   BugIcon,
@@ -159,7 +159,7 @@ function AdminLogin({ error }: { error: string }) {
   const [submitting, setSubmitting] = useState(false)
   const [message, setMessage] = useState(error)
 
-  async function signInWithGoogle(credential?: string) {
+  const signInWithGoogle = useCallback(async (credential?: string) => {
     const supabase = getBrowserSupabaseClient()
     if (!supabase || !credential) {
       setMessage("Google không trả về thông tin đăng nhập hợp lệ.")
@@ -175,7 +175,16 @@ function AdminLogin({ error }: { error: string }) {
     setSubmitting(false)
     if (loginError)
       setMessage(`Không thể đăng nhập Google: ${loginError.message}`)
-  }
+  }, [])
+
+  const handleGoogleSuccess = useCallback(
+    (response: CredentialResponse) => void signInWithGoogle(response.credential),
+    [signInWithGoogle]
+  )
+  const handleGoogleError = useCallback(
+    () => setMessage("Không thể mở hoặc hoàn tất đăng nhập Google."),
+    []
+  )
 
   return (
     <main className="flex min-h-[70vh] items-center justify-center px-5 py-12">
@@ -205,8 +214,8 @@ function AdminLogin({ error }: { error: string }) {
           ) : process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID ? (
             <GoogleOAuthProvider clientId={process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID}>
               <GoogleLogin
-                onSuccess={(response) => void signInWithGoogle(response.credential)}
-                onError={() => setMessage("Không thể mở hoặc hoàn tất đăng nhập Google.")}
+                onSuccess={handleGoogleSuccess}
+                onError={handleGoogleError}
                 text="signin_with"
                 shape="pill"
                 size="large"
