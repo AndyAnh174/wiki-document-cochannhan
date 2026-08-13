@@ -214,20 +214,21 @@ export function FaqManager() {
       <CardContent>
         <div className="overflow-hidden rounded-lg border">
           <Table>
-            <TableHeader><TableRow><TableHead className="w-16">STT</TableHead><TableHead>Câu hỏi</TableHead><TableHead>Nhóm</TableHead><TableHead>Trạng thái</TableHead><TableHead className="w-24 text-right">Thao tác</TableHead></TableRow></TableHeader>
+            <TableHeader><TableRow><TableHead className="w-16">STT</TableHead><TableHead>Câu hỏi</TableHead><TableHead>Nhóm</TableHead><TableHead>Ảnh</TableHead><TableHead>Trạng thái</TableHead><TableHead className="w-24 text-right">Thao tác</TableHead></TableRow></TableHeader>
             <TableBody>
               {loading ? (
-                <TableRow><TableCell colSpan={5}><span className="flex items-center gap-2 py-8 text-muted-foreground"><Spinner /> Đang tải…</span></TableCell></TableRow>
+                <TableRow><TableCell colSpan={6}><span className="flex items-center gap-2 py-8 text-muted-foreground"><Spinner /> Đang tải…</span></TableCell></TableRow>
               ) : rows.length ? rows.map((row) => (
                 <TableRow key={row.id}>
                   <TableCell>{row.sort_order}</TableCell>
                   <TableCell className="max-w-xl font-medium">{row.question}</TableCell>
                   <TableCell>{row.category}</TableCell>
+                  <TableCell><Badge variant="outline"><ImageIcon data-icon="inline-start" /> {row.faq_media.length}</Badge></TableCell>
                   <TableCell><Badge variant={row.is_published ? "secondary" : "outline"}>{row.is_published ? "Công khai" : "Bản nháp"}</Badge></TableCell>
                   <TableCell><div className="flex justify-end gap-1"><Button variant="ghost" size="icon-sm" onClick={() => edit(row)}><PencilIcon /><span className="sr-only">Sửa {row.question}</span></Button><ConfirmDeleteDialog label={row.question} onConfirm={() => remove(row)} /></div></TableCell>
                 </TableRow>
               )) : (
-                <TableRow><TableCell colSpan={5} className="py-12 text-center text-muted-foreground">Chưa có câu hỏi nào.</TableCell></TableRow>
+                <TableRow><TableCell colSpan={6} className="py-12 text-center text-muted-foreground">Chưa có câu hỏi nào.</TableCell></TableRow>
               )}
             </TableBody>
           </Table>
