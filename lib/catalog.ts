@@ -21,6 +21,10 @@ const sourceRoot = path.join(
 const langPath = path.join(sourceRoot, "lang", "en_us.json")
 const modelRoot = path.join(sourceRoot, "models", "item")
 const textureRoot = path.join(sourceRoot, "textures")
+const javaRoot = path.join(process.cwd(), "..", "decompile-src", "net", "guzhenren")
+const entitySourceRoot = path.join(javaRoot, "entity")
+const effectSourceRoot = path.join(javaRoot, "potion")
+const entityRegistryPath = path.join(javaRoot, "init", "GuzhenrenModEntities.java")
 const generatedCatalogPath = path.join(process.cwd(), "data", "catalog.generated.json")
 
 export const catalogDefinitions: Record<CatalogKind, CatalogDefinition> = {
@@ -83,7 +87,7 @@ function clean(value = "") {
   return value
     .replace(/§[0-9a-fk-or]/gi, "")
     .replace(/<br\s*\/?\s*>/gi, "\n")
-    .replace(/[`*_]/g, "")
+    .replace(/[`*]/g, "")
     .trim()
 }
 
@@ -242,6 +246,131 @@ function markdownTable(chapterTitle: string, headerIncludes: string) {
   return rows
 }
 
+function readSource(filePath: string) {
+  return fs.existsSync(filePath) ? fs.readFileSync(filePath, "utf8") : ""
+}
+
+function formatStat(value: number) {
+  return Number.isInteger(value) ? String(value) : String(Number(value.toFixed(3)))
+}
+
+function effectSourceDetails(implementation: string) {
+  const source = readSource(path.join(effectSourceRoot, `${implementation}.java`))
+  const category = source.match(/MobEffectCategory\.([A-Z_]+)/)?.[1] ?? "NEUTRAL"
+  const categoryLabel = {
+    BENEFICIAL: "Có lợi",
+    HARMFUL: "Có hại",
+    NEUTRAL: "Trung tính",
+  }[category] ?? "Trung tính"
+  const procedures = [...source.matchAll(/net\.guzhenren\.procedures\.([A-Za-z0-9_]+)Procedure/g)]
+    .map((match) => match[1])
+    .filter((name, index, all) => all.indexOf(name) === index)
+  const appliesEveryTick = /shouldApplyEffectTickThisTick[\s\S]*?return true;/.test(source)
+  const modifierMatches = [...source.matchAll(
+    /addAttributeModifier\(Attributes\.([A-Z_]+),[\s\S]*?,\s*(-?[\d.]+),\s*AttributeModifier\.Operation\.([A-Z_]+)/g
+  )]
+  const modifiers = modifierMatches.map((match) => ({
+    attribute: match[1],
+    value: Number(match[2]),
+    operation: match[3],
+  }))
+  return { categoryLabel, procedures, appliesEveryTick, modifiers, hasSource: Boolean(source) }
+}
+
+const effectAttributeLabels: Record<string, string> = {
+  MAX_HEALTH: "máu tối đa",
+  ARMOR: "giáp",
+  ATTACK_DAMAGE: "sát thương",
+  ATTACK_SPEED: "tốc độ đánh",
+  MOVEMENT_SPEED: "tốc độ di chuyển",
+  KNOCKBACK_RESISTANCE: "kháng hất văng",
+  LUCK: "may mắn",
+}
+
+function effectMechanicDescription(implementation: string) {
+  const mechanics = effectSourceDetails(implementation)
+  const details: string[] = []
+  if (mechanics.appliesEveryTick) {
+    details.push("Logic của hiệu ứng được chạy ở mỗi tick khi trạng thái còn thời gian.")
+  }
+  if (mechanics.modifiers.length) {
+    details.push(
+      `Trực tiếp thay đổi ${mechanics.modifiers.map((modifier) => {
+        const label = effectAttributeLabels[modifier.attribute] ?? modifier.attribute.toLowerCase()
+        const sign = modifier.value > 0 ? "+" : ""
+        return `${label} ${sign}${formatStat(modifier.value)} (${modifier.operation.toLowerCase()})`
+      }).join(", ")}.`
+    )
+  }
+  if (mechanics.procedures.length) {
+    details.push(
+      `Tác dụng thực tế được xử lý bởi ${mechanics.procedures.length} procedure của mod${mechanics.appliesEveryTick ? " trong lúc hiệu ứng hoạt động" : " khi hiệu ứng được kích hoạt"}.`
+    )
+  }
+  if (!details.length) {
+    details.push(
+      "Class hiệu ứng không tự gây sát thương hay đổi chỉ số; nó đóng vai trò cờ trạng thái để kỹ năng và procedure khác của mod kiểm tra."
+    )
+  }
+  return { ...mechanics, details }
+}
+
+type EntitySourceInfo = { className: string; mobCategory: string }
+let entitySourceIndex: Map<string, EntitySourceInfo> | undefined
+
+function getEntitySourceIndex() {
+  if (entitySourceIndex) return entitySourceIndex
+  entitySourceIndex = new Map()
+  const registry = readSource(entityRegistryPath)
+  const pattern = /register\("([^"]+)",\s*EntityType\.Builder\.of\(([A-Za-z0-9_]+)::new,\s*\(MobCategory\)MobCategory\.([A-Z_]+)/g
+  for (const match of registry.matchAll(pattern)) {
+    entitySourceIndex.set(match[1], { className: match[2], mobCategory: match[3] })
+  }
+  return entitySourceIndex
+}
+
+const entityAttributeLabels: Record<string, string> = {
+  MAX_HEALTH: "Máu tối đa",
+  ATTACK_DAMAGE: "Sát thương",
+  ARMOR: "Giáp",
+  ARMOR_TOUGHNESS: "Độ cứng giáp",
+  MOVEMENT_SPEED: "Tốc độ di chuyển",
+  FOLLOW_RANGE: "Tầm phát hiện",
+  KNOCKBACK_RESISTANCE: "Kháng hất văng",
+  ATTACK_KNOCKBACK: "Lực hất văng",
+  ATTACK_SPEED: "Tốc độ đánh",
+  FLYING_SPEED: "Tốc độ bay",
+  STEP_HEIGHT: "Độ cao bước",
+}
+
+function entitySourceDetails(id: string) {
+  const definition = getEntitySourceIndex().get(id)
+  if (!definition) return undefined
+  const source = readSource(path.join(entitySourceRoot, `${definition.className}.java`))
+  const stats = new Map<string, number>()
+  for (const match of source.matchAll(/Attributes\.([A-Z_]+),\s*(-?[\d.]+)/g)) {
+    if (!stats.has(match[1])) stats.set(match[1], Number(match[2]))
+  }
+  const goals = new Set([...source.matchAll(/new\s+([A-Za-z0-9_]+Goal)\s*\(/g)].map((match) => match[1]))
+  const behaviors: string[] = []
+  if (goals.has("MeleeAttackGoal")) behaviors.push("chiến đấu cận chiến")
+  if (goals.has("RangedAttackGoal")) behaviors.push("tấn công tầm xa")
+  if (goals.has("NearestAttackableTargetGoal")) behaviors.push("chủ động chọn mục tiêu gần")
+  if (goals.has("FollowOwnerGoal")) behaviors.push("đi theo chủ sau khi thuần hóa")
+  if (goals.has("RandomStrollGoal") || goals.has("WaterAvoidingRandomStrollGoal")) behaviors.push("đi lang thang")
+  if (goals.has("PanicGoal")) behaviors.push("bỏ chạy khi gặp nguy hiểm")
+  if (goals.has("FloatGoal")) behaviors.push("có thể nổi khi ở trong nước")
+  const typeLabel = {
+    MONSTER: "sinh vật thù địch",
+    CREATURE: "sinh vật tự nhiên",
+    AMBIENT: "sinh vật môi trường",
+    WATER_CREATURE: "sinh vật dưới nước",
+    WATER_AMBIENT: "sinh vật nước nhỏ",
+    MISC: "thực thể đặc biệt",
+  }[definition.mobCategory] ?? "sinh vật"
+  return { definition, stats, behaviors, typeLabel }
+}
+
 function getRecipes(): CatalogRecipe[] {
   const lang = getLang()
   return Object.entries(lang)
@@ -398,12 +527,23 @@ function effectCatalog(): CatalogRecord[] {
   const notes = new Map<string, string>()
   for (const header of ["Tên tiếng Việt", "Nguồn cổ", "Mô tả"]) {
     for (const row of markdownTable("mob-effects.md", header)) {
-      if (row[0] && row.at(-1)) notes.set(row[0], row.at(-1)!)
+      if (row[0] && row.at(-1)) {
+        for (const id of row[0].split("/").map((value) => value.trim())) {
+          notes.set(id, row.at(-1)!)
+        }
+      }
     }
   }
   return markdownTable("mob-effects.md", "Class implementation").map(
     ([id, name, implementation]) => {
       const imagePath = path.join(textureRoot, "mob_effect", `${id}.png`)
+      const mechanics = effectMechanicDescription(implementation)
+      const note = notes.get(id)
+      const mechanicSummary = mechanics.appliesEveryTick
+        ? "Kích hoạt logic liên tục mỗi tick trong thời gian hiệu ứng tồn tại."
+        : mechanics.modifiers.length
+          ? mechanics.details[0]
+          : "Được dùng làm trạng thái để các kỹ năng và procedure của mod nhận biết."
       return {
         kind: "effects",
         id,
@@ -411,16 +551,23 @@ function effectCatalog(): CatalogRecord[] {
         image: fs.existsSync(imagePath)
           ? `/mod-assets/catalog/mob_effect/${id}.png`
           : undefined,
-        category: notes.get(id)?.includes("Cooldown")
+        category: note?.includes("Cooldown")
           ? "Hồi chiêu"
-          : "Hiệu ứng",
-        summary:
-          notes.get(id) ?? `Hiệu ứng được triển khai bởi ${implementation}.`,
+          : mechanics.categoryLabel,
+        summary: note ? `${note}. ${mechanicSummary}` : mechanicSummary,
         attributes: [
           ["ID", `guzhenren:${id}`],
+          ["Loại", mechanics.categoryLabel],
+          ["Tần suất", mechanics.appliesEveryTick ? "Mỗi tick" : "Theo sự kiện/kỹ năng"],
           ["Implementation", implementation],
         ],
-        details: notes.has(id) ? [notes.get(id)!] : [],
+        details: [
+          ...(note ? [`Công dụng: ${note}.`] : []),
+          ...mechanics.details,
+          ...(mechanics.procedures.length
+            ? [`Procedure liên quan: ${mechanics.procedures.join(", ")}.`]
+            : []),
+        ],
       }
     }
   )
@@ -442,11 +589,31 @@ function creatureCatalog(): CatalogRecord[] {
   }
   return [...grouped.entries()].map(([id, rows]) => {
     const [, entityId, name] = rows[0]
+    const source = entitySourceDetails(id)
     const biomes = [
       ...new Set(
         rows.flatMap((row) => row[3].split(",").map((biome) => biome.trim()))
       ),
     ]
+    const health = source?.stats.get("MAX_HEALTH")
+    const damage = source?.stats.get("ATTACK_DAMAGE")
+    const armor = source?.stats.get("ARMOR")
+    const combatSummary = [
+      health !== undefined ? `${formatStat(health)} HP` : undefined,
+      damage !== undefined ? `${formatStat(damage)} sát thương` : undefined,
+      armor !== undefined ? `${formatStat(armor)} giáp` : undefined,
+    ].filter(Boolean).join(", ")
+    const spawnSummary = `Xuất hiện tại ${biomes.slice(0, 3).join(", ")}${biomes.length > 3 ? ` và ${biomes.length - 3} biome khác` : ""}.`
+    const statAttributes = source
+      ? [...source.stats.entries()]
+          .filter(([attribute]) => entityAttributeLabels[attribute])
+          .map<[string, string]>(([attribute, value]) => [
+            entityAttributeLabels[attribute],
+            attribute === "MAX_HEALTH"
+              ? `${formatStat(value)} HP (${formatStat(value / 2)} tim)`
+              : formatStat(value),
+          ])
+      : []
     return {
       kind: "creatures",
       id,
@@ -455,16 +622,26 @@ function creatureCatalog(): CatalogRecord[] {
       category: biomes.includes("Mọi biome")
         ? "Mọi biome"
         : biomes[0] || "Chưa rõ",
-      summary: `Xuất hiện tại ${biomes.slice(0, 3).join(", ")}${biomes.length > 3 ? ` và ${biomes.length - 3} biome khác` : ""}.`,
+      summary: `${source ? `${source.typeLabel.charAt(0).toUpperCase()}${source.typeLabel.slice(1)}` : "Sinh vật"}${combatSummary ? ` có ${combatSummary}` : ""}. ${spawnSummary}`,
       attributes: [
         ["Entity ID", entityId],
+        ...(source ? [["Phân loại", source.typeLabel] as [string, string]] : []),
+        ...statAttributes,
         ["Biome", biomes.join(", ")],
         ["Trọng số", [...new Set(rows.map((row) => row[4]))].join(", ")],
         ["Kích thước đàn", [...new Set(rows.map((row) => row[5]))].join(", ")],
       ],
-      details: rows.map(
-        (row) => `${row[3]} · trọng số ${row[4]} · đàn ${row[5]}`
-      ),
+      details: [
+        ...(health !== undefined
+          ? [`Chỉ số sinh tồn: ${formatStat(health)} HP, tương đương ${formatStat(health / 2)} tim Minecraft${armor !== undefined ? `; ${formatStat(armor)} điểm giáp` : ""}.`]
+          : ["Source entity không khai báo MAX_HEALTH riêng; trò chơi dùng chỉ số kế thừa từ lớp cha."]),
+        ...(source?.behaviors.length
+          ? [`Hành vi AI: ${source.behaviors.join(", ")}.`]
+          : ["Không tìm thấy goal AI tiêu chuẩn trong class entity; hành vi có thể do procedure riêng điều khiển."]),
+        ...rows.map(
+          (row) => `${row[3]} · trọng số ${row[4]} · đàn ${row[5]}`
+        ),
+      ],
     }
   })
 }

@@ -1,11 +1,12 @@
 "use client"
 
-import { useEffect, useState, type FormEvent } from "react"
+import { useEffect, useState } from "react"
 import type { Session } from "@supabase/supabase-js"
 import {
   BookOpenIcon,
   BugIcon,
   DatabaseIcon,
+  LogInIcon,
   LogOutIcon,
   ShieldCheckIcon,
 } from "lucide-react"
@@ -24,14 +25,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
-import {
-  Field,
-  FieldDescription,
-  FieldError,
-  FieldGroup,
-  FieldLabel,
-} from "@/components/ui/field"
-import { Input } from "@/components/ui/input"
+import { FieldError } from "@/components/ui/field"
 import { Spinner } from "@/components/ui/spinner"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { toast } from "@/components/ui/toast"
@@ -39,6 +33,7 @@ import {
   getBrowserSupabaseClient,
   isBrowserSupabaseConfigured,
 } from "@/lib/supabase/client"
+import { withBasePath } from "@/lib/base-path"
 
 export function AdminDashboard() {
   const [session, setSession] = useState<Session | null>(null)
@@ -59,14 +54,11 @@ export function AdminDashboard() {
         return
       }
 
-      const { data, error } = await client
-        .from("admin_users")
-        .select("user_id")
-        .eq("user_id", nextSession.user.id)
-        .maybeSingle()
-      setAuthorized(Boolean(data) && !error)
+      const { data, error } = await client.rpc("is_admin")
+      setAuthorized(data === true && !error)
       setChecking(false)
-      if (!data || error) setAuthError("Tài khoản này không có quyền quản trị.")
+      if (data !== true || error)
+        setAuthError("Tài khoản Google này không có quyền quản trị.")
     }
 
     void client.auth.getSession().then(({ data }) => verify(data.session))
@@ -157,23 +149,24 @@ export function AdminDashboard() {
 }
 
 function AdminLogin({ error }: { error: string }) {
-  const [email, setEmail] = useState("admin@ccn.local")
-  const [password, setPassword] = useState("")
   const [submitting, setSubmitting] = useState(false)
   const [message, setMessage] = useState(error)
 
-  async function submit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault()
+  async function signInWithGoogle() {
     const supabase = getBrowserSupabaseClient()
     if (!supabase) return
     setSubmitting(true)
     setMessage("")
-    const { error: loginError } = await supabase.auth.signInWithPassword({
-      email,
-      password,
+    await supabase.auth.signOut({ scope: "local" })
+    const { error: loginError } = await supabase.auth.signInWithOAuth({
+      provider: "google",
+      options: {
+        redirectTo: `${window.location.origin}${withBasePath("/admin")}`,
+      },
     })
     setSubmitting(false)
-    if (loginError) setMessage("Email hoặc mật khẩu không đúng.")
+    if (loginError)
+      setMessage(`Không thể đăng nhập Google: ${loginError.message}`)
   }
 
   return (
@@ -181,55 +174,27 @@ function AdminLogin({ error }: { error: string }) {
       <Card className="w-full max-w-md">
         <CardHeader>
           <Badge variant="outline" className="mb-2 w-fit">
-            <ShieldCheckIcon data-icon="inline-start" /> Supabase Auth
+            <ShieldCheckIcon data-icon="inline-start" /> Google OAuth · Supabase
           </Badge>
           <CardTitle className="font-serif text-2xl">
             Đăng nhập quản trị
           </CardTitle>
           <CardDescription>
-            Chỉ tài khoản nằm trong danh sách quản trị mới có quyền ghi dữ liệu.
+            Chỉ tài khoản Google nằm trong danh sách quản trị mới có quyền ghi dữ liệu.
           </CardDescription>
         </CardHeader>
-        <form onSubmit={submit}>
-          <CardContent>
-            <FieldGroup>
-              <Field data-invalid={Boolean(message) || undefined}>
-                <FieldLabel htmlFor="admin-email">Email</FieldLabel>
-                <Input
-                  id="admin-email"
-                  type="email"
-                  autoComplete="username"
-                  value={email}
-                  onChange={(event) => setEmail(event.target.value)}
-                  aria-invalid={Boolean(message)}
-                  required
-                />
-              </Field>
-              <Field data-invalid={Boolean(message) || undefined}>
-                <FieldLabel htmlFor="admin-password">Mật khẩu</FieldLabel>
-                <Input
-                  id="admin-password"
-                  type="password"
-                  autoComplete="current-password"
-                  value={password}
-                  onChange={(event) => setPassword(event.target.value)}
-                  aria-invalid={Boolean(message)}
-                  required
-                />
-                <FieldDescription>
-                  Mật khẩu quản trị Wiki, không phải mật khẩu Supabase Studio.
-                </FieldDescription>
-                {message ? <FieldError>{message}</FieldError> : null}
-              </Field>
-            </FieldGroup>
-          </CardContent>
-          <CardFooter className="mt-6">
-            <Button type="submit" className="w-full" disabled={submitting}>
-              {submitting ? <Spinner data-icon="inline-start" /> : null}
-              Đăng nhập
-            </Button>
-          </CardFooter>
-        </form>
+        <CardContent>
+          <p className="text-sm text-muted-foreground">
+            Wiki không nhận hay lưu mật khẩu Google. Supabase xử lý phiên đăng nhập và RLS kiểm tra quyền ở cơ sở dữ liệu.
+          </p>
+          {message ? <FieldError className="mt-4">{message}</FieldError> : null}
+        </CardContent>
+        <CardFooter>
+          <Button className="w-full" disabled={submitting} onClick={signInWithGoogle}>
+            {submitting ? <Spinner data-icon="inline-start" /> : <LogInIcon data-icon="inline-start" />}
+            Đăng nhập với Google
+          </Button>
+        </CardFooter>
       </Card>
     </main>
   )
