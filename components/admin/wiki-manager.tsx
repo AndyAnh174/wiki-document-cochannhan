@@ -97,6 +97,7 @@ export function WikiManager() {
       .select(
         "id,slug,title,category,description,content,chapter_index,is_published,updated_at"
       )
+      .neq("slug", "faq")
       .order("chapter_index")
     if (query.trim())
       request = request.or(

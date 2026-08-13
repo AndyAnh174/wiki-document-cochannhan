@@ -7,11 +7,13 @@ import {
   BookOpenIcon,
   BugIcon,
   DatabaseIcon,
+  CircleHelpIcon,
   LogOutIcon,
   ShieldCheckIcon,
 } from "lucide-react"
 
 import { CatalogManager } from "@/components/admin/catalog-manager"
+import { FaqManager } from "@/components/admin/faq-manager"
 import { RecipeManager } from "@/components/admin/recipe-manager"
 import { WikiManager } from "@/components/admin/wiki-manager"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
@@ -132,6 +134,9 @@ export function AdminDashboard() {
           <TabsTrigger value="wiki">
             <BookOpenIcon data-icon="inline-start" /> Chương Wiki
           </TabsTrigger>
+          <TabsTrigger value="faq">
+            <CircleHelpIcon data-icon="inline-start" /> FAQ
+          </TabsTrigger>
         </TabsList>
         <TabsContent value="catalog" className="pt-6">
           <CatalogManager />
@@ -141,6 +146,9 @@ export function AdminDashboard() {
         </TabsContent>
         <TabsContent value="wiki" className="pt-6">
           <WikiManager />
+        </TabsContent>
+        <TabsContent value="faq" className="pt-6">
+          <FaqManager />
         </TabsContent>
       </Tabs>
     </main>
