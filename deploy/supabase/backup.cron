@@ -1,0 +1,1 @@
+17 3 * * * root /opt/supabase-ccn/backup.sh >>/var/log/supabase-ccn-backup.log 2>&1

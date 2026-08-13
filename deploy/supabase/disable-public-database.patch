@@ -1,0 +1,13 @@
+--- docker-compose.yml
++++ docker-compose.yml
+@@ -532,9 +532,6 @@
+   supavisor:
+     container_name: supabase-pooler
+     image: supabase/supavisor:2.9.5
+     restart: unless-stopped
+-    ports:
+-      - ${POSTGRES_PORT}:5432
+-      - ${POOLER_PROXY_PORT_TRANSACTION}:6543
+     volumes:
+       - ./volumes/pooler/pooler.exs:/etc/pooler/pooler.exs:ro,z
+     healthcheck:

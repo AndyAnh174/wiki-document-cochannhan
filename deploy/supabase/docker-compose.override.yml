@@ -1,0 +1,12 @@
+services:
+  api-gw:
+    ports: !override
+      - target: 8000
+        published: "${API_GW_HTTP_PORT:-8000}"
+        host_ip: "${API_GW_BIND:-0.0.0.0}"
+        protocol: tcp
+
+  # Wiki không dùng Edge Functions. Chỉ bật thủ công khi thật sự cần để tránh
+  # runtime tải dependency bên ngoài lúc khởi động production.
+  functions:
+    profiles: ["edge-functions"]
