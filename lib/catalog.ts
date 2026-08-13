@@ -348,7 +348,10 @@ function entitySourceDetails(id: string) {
   if (!definition) return undefined
   const source = readSource(path.join(entitySourceRoot, `${definition.className}.java`))
   const stats = new Map<string, number>()
-  for (const match of source.matchAll(/Attributes\.([A-Z_]+),\s*(-?[\d.]+)/g)) {
+  const attributeBlock = source.match(
+    /createAttributes\(\)[\s\S]*?\{([\s\S]*?)return builder;/
+  )?.[1] ?? ""
+  for (const match of attributeBlock.matchAll(/Attributes\.([A-Z_]+),\s*(-?[\d.]+)/g)) {
     if (!stats.has(match[1])) stats.set(match[1], Number(match[2]))
   }
   const goals = new Set([...source.matchAll(/new\s+([A-Za-z0-9_]+Goal)\s*\(/g)].map((match) => match[1]))
