@@ -164,18 +164,30 @@ function resolveItemImage(id: string, depth = 0): string | undefined {
 
 export function resolveLooseItemImage(identifier: string, displayText = "") {
   const directId = identifier.replace(/^guzhenren:/, "")
-  const generatedGu = generatedCatalogCache?.gu ?? []
-  if (generatedGu.length && !generatedItemImageById) {
+  const generatedItems = [
+    ...(generatedCatalogCache?.gu ?? []),
+    ...(generatedCatalogCache?.materials ?? []),
+  ]
+  if (generatedItems.length && !generatedItemImageById) {
     generatedItemImageById = new Map(
-      generatedGu.flatMap((item) =>
+      generatedItems.flatMap((item) =>
         item.image ? [[normalize(item.id), item.image] as [string, string]] : []
       )
     )
-    generatedItemImagesByName = generatedGu
-      .flatMap((item) =>
-        item.image ? [[normalize(item.name), item.image] as [string, string]] : []
-      )
-      .filter(([name]) => name.length >= 6)
+    generatedItemImagesByName = generatedItems
+      .flatMap((item) => {
+        if (!item.image) return []
+
+        const names = [item.name]
+        if (item.kind === "materials") {
+          names.push(item.name.replace(/^Cổ tài(?:\s*[_-]\s*|\s+)/iu, ""))
+        }
+
+        return [...new Set(names.map(normalize))].map(
+          (name) => [name, item.image!] as [string, string]
+        )
+      })
+      .filter(([name]) => name.length >= 4)
       .sort((a, b) => b[0].length - a[0].length)
   }
 
