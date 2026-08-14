@@ -13,6 +13,7 @@ services:
         NEXT_PUBLIC_GOOGLE_CLIENT_ID: ${NEXT_PUBLIC_GOOGLE_CLIENT_ID:-}
     environment:
       WIKI_CHAT_API_URL: ${WIKI_CHAT_API_URL:-https://ccn.andyanh.id.vn/api/wiki/chat}
+      WIKI_CHAT_FALLBACK_API_URL: ${WIKI_CHAT_FALLBACK_API_URL:-}
     ports:
       - "${WIKI_BIND_ADDRESS:-192.168.1.16}:${WIKI_HOST_PORT:-3010}:3000"
     init: true
