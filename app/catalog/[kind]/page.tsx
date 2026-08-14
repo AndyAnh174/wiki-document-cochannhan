@@ -11,6 +11,8 @@ import { catalogKinds, type CatalogKind } from "@/lib/catalog-types"
 
 type PageProps = { params: Promise<{ kind: string }> }
 
+export const dynamic = "force-dynamic"
+
 function isKind(value: string): value is CatalogKind {
   return catalogKinds.includes(value as CatalogKind)
 }
