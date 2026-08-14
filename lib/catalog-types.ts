@@ -1,5 +1,6 @@
 export const catalogKinds = [
   "gu",
+  "materials",
   "killer-moves",
   "equipment",
   "effects",

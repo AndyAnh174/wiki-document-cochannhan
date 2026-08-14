@@ -9,6 +9,7 @@ import {
   CalculatorIcon,
   DatabaseIcon,
   FlaskConicalIcon,
+  GemIcon,
   GhostIcon,
   ShieldIcon,
   SwordsIcon,
@@ -53,6 +54,7 @@ const categoryOrder = [
 
 const catalogLinks = [
   ["Cổ trùng", "/catalog/gu", BugIcon],
+  ["Cổ tài", "/catalog/materials", GemIcon],
   ["Sát chiêu", "/catalog/killer-moves", SwordsIcon],
   ["Trang bị", "/catalog/equipment", ShieldIcon],
   ["Hiệu ứng", "/catalog/effects", FlaskConicalIcon],

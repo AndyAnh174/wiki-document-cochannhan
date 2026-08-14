@@ -99,6 +99,7 @@ const emptyForm: CatalogForm = {
 
 const kindLabels: Record<CatalogKind, string> = {
   gu: "Cổ trùng",
+  materials: "Cổ tài",
   "killer-moves": "Sát chiêu",
   equipment: "Trang bị",
   effects: "Hiệu ứng",

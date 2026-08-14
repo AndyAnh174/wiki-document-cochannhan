@@ -35,6 +35,13 @@ export const catalogDefinitions: Record<CatalogKind, CatalogDefinition> = {
     description:
       "Thông tin từng con Cổ, phẩm cấp, lưu phái, công dụng, thức ăn và Cổ phương liên quan.",
   },
+  materials: {
+    kind: "materials",
+    title: "Bách khoa Cổ tài",
+    shortTitle: "Cổ tài",
+    description:
+      "Danh mục Cổ tài dùng để nuôi Cổ, luyện hóa và chế tạo; tách biệt hoàn toàn với Cổ trùng.",
+  },
   "killer-moves": {
     kind: "killer-moves",
     title: "Sát chiêu",
@@ -464,6 +471,62 @@ function guCatalog(): CatalogRecord[] {
     .sort((a, b) => a.name.localeCompare(b.name, "vi"))
 }
 
+function materialCategory(id: string, name: string) {
+  const materialName = name.replace(/^Cổ tài\s*/i, "")
+  const value = normalize(`${id} ${materialName}`)
+  if (/hồn phách|linh hồn/i.test(materialName) || /hunpo/.test(value)) return "Hồn phách"
+  if (/(^|\s)(da|thịt|mắt|răng|móng|vuốt|sừng|lông|trứng|xương|cốt|máu|huyết|mai)(\s|$)/i.test(materialName))
+    return "Thú tài"
+  if (/(hoa|thảo|cỏ|mộc|lá|quỳ|trúc|sen|nấm|măng|quả)/i.test(materialName))
+    return "Thực vật"
+  if (/(thạch|kim|quặng|châu|ngọc|sa|đĩnh|tinh nguyên)/i.test(materialName))
+    return "Khoáng vật"
+  if (/(khí|phong|hỏa|thủy|lôi|băng)/i.test(materialName)) return "Tinh khí"
+  return "Cổ tài khác"
+}
+
+function materialSourceDetails(source: string) {
+  if (!source) return ["Chưa tìm thấy nguồn nhận tự động trong recipe, loot table, procedure hoặc entity."]
+  return source.split(";").map((part) => {
+    const value = part.trim()
+    if (value.startsWith("nguyen-lieu-")) {
+      const count = value.match(/nguyen-lieu-(\d+)-ct/)?.[1]
+      return `Được dùng làm nguyên liệu trong ${count ?? "nhiều"} công thức.`
+    }
+    if (value.startsWith("che-tao:"))
+      return `Có thể chế tạo bằng ${value.slice("che-tao:".length).replaceAll("_", " ")}.`
+    if (value.startsWith("loot:")) return `Có trong loot table: ${value.slice(5)}.`
+    if (value.startsWith("proc:")) return `Được cấp hoặc xử lý bởi procedure: ${value.slice(5)}.`
+    if (value.startsWith("entity-ref:")) return `Được entity tham chiếu ${value.slice(11)} lần.`
+    return value
+  })
+}
+
+function materialCatalog(): CatalogRecord[] {
+  return markdownTable("item-sources.md", "Item ID")
+    .map<CatalogRecord>(([id, name, source]) => {
+      const category = materialCategory(id, name)
+      const details = materialSourceDetails(source)
+      return {
+        kind: "materials" as const,
+        id,
+        name,
+        image: resolveItemImage(id),
+        category,
+        summary: source
+          ? details[0]
+          : "Cổ tài đã đăng ký trong mod nhưng chưa tìm thấy nguồn nhận tự động.",
+        attributes: [
+          ["ID", `guzhenren:${id}`],
+          ["Loại", category],
+          ["Nguồn gốc", source || "Chưa xác định"],
+        ],
+        details,
+      }
+    })
+    .sort((a, b) => a.name.localeCompare(b.name, "vi"))
+}
+
 function killerMoveCatalog(): CatalogRecord[] {
   const rows = markdownTable("sat-chieu-catalog.md", "Cổ quyển ID")
   const positionRows = markdownTable("sat-chieu-vi-tri.md", "Ô 11: Cổ quyển")
@@ -658,6 +721,8 @@ export function getCatalogRecords(kind: CatalogKind) {
     const records =
       kind === "gu"
         ? guCatalog()
+        : kind === "materials"
+          ? materialCatalog()
         : kind === "killer-moves"
           ? killerMoveCatalog()
           : kind === "equipment"
