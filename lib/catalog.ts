@@ -20,6 +20,7 @@ const sourceRoot = path.join(
 )
 const langPath = path.join(sourceRoot, "lang", "en_us.json")
 const modelRoot = path.join(sourceRoot, "models", "item")
+const blockModelRoot = path.join(sourceRoot, "models", "block")
 const textureRoot = path.join(sourceRoot, "textures")
 const javaRoot = path.join(process.cwd(), "..", "decompile-src", "net", "guzhenren")
 const entitySourceRoot = path.join(javaRoot, "entity")
@@ -76,6 +77,7 @@ let langCache: Record<string, string> | undefined
 const catalogCache = new Map<CatalogKind, CatalogRecord[]>()
 let generatedCatalogCache: Partial<Record<CatalogKind, CatalogRecord[]>> | undefined
 const imageCache = new Map<string, string | undefined>()
+const blockImageCache = new Map<string, string | undefined>()
 let looseModelIndex: Map<string, string> | undefined
 let localizedItemIndex: Array<[string, string]> | undefined
 let generatedItemImageById: Map<string, string> | undefined
@@ -122,13 +124,56 @@ function itemDescriptions(id: string) {
 
 function publicTexturePath(texture: string) {
   const match = texture.match(
-    /^guzhenren:(item|mob_effect|entities|entity)\/(.+)$/
+    /^guzhenren:(item|block|mob_effect|entities|entity)\/(.+)$/
   )
   if (!match) return undefined
   const [, folder, relative] = match
   const diskPath = path.join(textureRoot, folder, `${relative}.png`)
   if (!fs.existsSync(diskPath)) return undefined
   return `/mod-assets/catalog/${folder}/${relative.replaceAll("\\", "/")}.png`
+}
+
+function resolveBlockImage(id: string, depth = 0): string | undefined {
+  if (blockImageCache.has(id)) return blockImageCache.get(id)
+  if (depth > 3) return undefined
+
+  const modelPath = path.join(blockModelRoot, `${id}.json`)
+  if (!fs.existsSync(modelPath)) {
+    blockImageCache.set(id, undefined)
+    return undefined
+  }
+
+  try {
+    const model = JSON.parse(fs.readFileSync(modelPath, "utf8")) as {
+      parent?: string
+      textures?: Record<string, string>
+    }
+    const preferredTexture =
+      model.textures?.layer0 ??
+      model.textures?.particle ??
+      model.textures?.cross ??
+      model.textures?.all ??
+      model.textures?.side ??
+      model.textures?.top ??
+      Object.values(model.textures ?? {}).find((texture) =>
+        texture.startsWith("guzhenren:block/")
+      )
+    const image = preferredTexture
+      ? publicTexturePath(preferredTexture)
+      : undefined
+    if (image) {
+      blockImageCache.set(id, image)
+      return image
+    }
+
+    const parent = model.parent?.match(/^guzhenren:block\/(.+)$/)?.[1]
+    const inherited = parent ? resolveBlockImage(parent, depth + 1) : undefined
+    blockImageCache.set(id, inherited)
+    return inherited
+  } catch {
+    blockImageCache.set(id, undefined)
+    return undefined
+  }
 }
 
 function resolveItemImage(id: string, depth = 0): string | undefined {
@@ -515,7 +560,7 @@ function materialSourceDetails(source: string) {
 }
 
 function materialCatalog(): CatalogRecord[] {
-  return markdownTable("item-sources.md", "Item ID")
+  const itemMaterials = markdownTable("item-sources.md", "Item ID")
     .map<CatalogRecord>(([id, name, source]) => {
       const category = materialCategory(id, name)
       const details = materialSourceDetails(source)
@@ -536,7 +581,54 @@ function materialCatalog(): CatalogRecord[] {
         details,
       }
     })
-    .sort((a, b) => a.name.localeCompare(b.name, "vi"))
+
+  const recordsById = new Map(itemMaterials.map((record) => [record.id, record]))
+  for (const [key, rawName] of Object.entries(getLang())) {
+    const id = key.match(/^block\.guzhenren\.([^.]+)$/)?.[1]
+    const name = clean(rawName)
+    if (!id || !/^Cổ tài(?:\s|_)/iu.test(name)) continue
+
+    const descriptions = Object.entries(getLang())
+      .filter(([descriptionKey]) =>
+        descriptionKey.startsWith(`block.guzhenren.${id}.description_`)
+      )
+      .sort(([a], [b]) => a.localeCompare(b, undefined, { numeric: true }))
+      .map(([, description]) => clean(description))
+      .filter(Boolean)
+    const existing = recordsById.get(id)
+    if (existing) {
+      existing.image ??= resolveBlockImage(id)
+      existing.details = [...new Set([...existing.details, ...descriptions])]
+      if (descriptions[0] && existing.summary.startsWith("Cổ tài đã đăng ký"))
+        existing.summary = descriptions[0]
+      continue
+    }
+
+    const category = materialCategory(id, name)
+    recordsById.set(id, {
+      kind: "materials",
+      id,
+      name,
+      image: resolveBlockImage(id),
+      category,
+      summary:
+        descriptions[0] ??
+        "Cổ tài dạng cây trồng hoặc khối đã đăng ký trong mod.",
+      attributes: [
+        ["ID", `guzhenren:${id}`],
+        ["Loại", category],
+        ["Dạng", "Block / cây trồng"],
+      ],
+      details:
+        descriptions.length > 0
+          ? descriptions
+          : ["Cổ tài có thể được đặt trong thế giới dưới dạng block."],
+    })
+  }
+
+  return [...recordsById.values()].sort((a, b) =>
+    a.name.localeCompare(b.name, "vi")
+  )
 }
 
 function killerMoveCatalog(): CatalogRecord[] {
